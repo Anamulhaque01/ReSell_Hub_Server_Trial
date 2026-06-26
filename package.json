@@ -1,0 +1,21 @@
+{
+  "name": "re_sell_hub_server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anamulhaque01/ReSell_Hub_Server_Trial.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Anamulhaque01/ReSell_Hub_Server_Trial/issues"
+  },
+  "homepage": "https://github.com/Anamulhaque01/ReSell_Hub_Server_Trial#readme"
+}
