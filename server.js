@@ -8,13 +8,12 @@ import authRoutes from './routes/authRoutes.js';
 import buyerRoutes from './routes/buyerRoutes.js';
 import sellerRoutes from './routes/sellerRoutes.js';
 import productRoutes from './routes/productRoutes.js';
+import adminRoutes from './routes/adminRoutes.js'; // Clean ES Import
 
 dotenv.config();
 
 const app = express();
-
 const PORT = process.env.PORT || 5000;
-
 
 // Middleware
 app.use(
@@ -26,13 +25,12 @@ app.use(
 
 app.use(express.json());
 
-
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/buyer', buyerRoutes);
 app.use('/api/seller', sellerRoutes);
 app.use('/api/products', productRoutes);
-
+app.use('/api/admin', adminRoutes);
 
 // Test route
 app.get('/', (req, res) => {
@@ -40,7 +38,6 @@ app.get('/', (req, res) => {
         message: "ReSell Hub API Server Running Smoothly"
     });
 });
-
 
 // Database + Server
 connectDB()
