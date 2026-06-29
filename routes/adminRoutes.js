@@ -1,3 +1,4 @@
+console.log("ADMIN ROUTES LOADED");
 import express from 'express';
 const router = express.Router();
 // Changed verifyAdmin to your actual authorizeRoles helper

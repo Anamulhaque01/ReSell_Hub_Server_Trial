@@ -43,6 +43,11 @@ app.use('/api/buyer', buyerRoutes);
 app.use('/api/seller', sellerRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/admin', adminRoutes);
+app.get('/api/admin/test', (req, res) => {
+    res.json({
+        message: "Admin route mounted"
+    });
+});
 
 // Test route
 app.get('/', (req, res) => {
