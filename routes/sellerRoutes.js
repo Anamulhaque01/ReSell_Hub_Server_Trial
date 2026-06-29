@@ -116,26 +116,34 @@ router.get('/products', verifyToken, isSeller, async (req, res) => {
 });
 
 // ==========================================
-// 4. PUT Update Product Details
+// PUT: UPDATE EXISTING PRODUCT BY ID
 // ==========================================
 router.put('/products/:id', verifyToken, isSeller, async (req, res) => {
     try {
         const sellerId = req.user.id || req.user._id;
-        const product = await Product.findById(req.params.id);
+        const productId = req.params.id;
 
-        if (!product) return res.status(404).json({ message: 'Product execution entry not found.' });
-        if (product.sellerInfo.userId.toString() !== sellerId.toString()) {
-            return res.status(401).json({ message: 'Unauthorized modification attempt.' });
+        // Find product document
+        const product = await Product.findById(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Target product listing not found.' });
         }
 
+        // Security check: Ensure the item belongs to the active seller
+        if (product.sellerInfo.userId.toString() !== sellerId.toString()) {
+            return res.status(403).json({ message: 'Unauthorized database update attempt operation.' });
+        }
+
+        // Apply incoming updates directly
         const updatedProduct = await Product.findByIdAndUpdate(
-            req.params.id,
+            productId,
             { $set: req.body },
-            { new: true }
+            { new: true, runValidators: true }
         );
-        res.status(200).json({ message: 'Product updated successfully!', product: updatedProduct });
+
+        res.status(200).json({ message: 'Listing document modified successfully!', updatedProduct });
     } catch (error) {
-        res.status(500).json({ message: 'Update cycle crashed.', error: error.message });
+        res.status(500).json({ message: 'Failed to update product details.', error: error.message });
     }
 });
 
@@ -156,6 +164,66 @@ router.delete('/products/:id', verifyToken, isSeller, async (req, res) => {
         res.status(200).json({ message: 'Product successfully dropped from database.' });
     } catch (error) {
         res.status(500).json({ message: 'Delete operations error.', error: error.message });
+    }
+});
+
+// ==========================================
+// 6. GET Incoming Customer Orders
+// ==========================================
+router.get('/orders', verifyToken, isSeller, async (req, res) => {
+    try {
+        const sellerId = req.user.id || req.user._id;
+
+        // Find products owned by this seller
+        const products = await Product.find({ 'sellerInfo.userId': sellerId });
+        const productIds = products.map(p => p._id);
+
+        // Find orders matching those products
+        const orders = await Order.find({ productId: { $in: productIds } }).sort({ createdAt: -1 });
+        res.status(200).json(orders);
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to retrieve customer orders.', error: error.message });
+    }
+});
+
+// ==========================================
+// 7. PATCH Update Order Delivery Status Flow
+// ==========================================
+router.patch('/orders/:id/status', verifyToken, isSeller, async (req, res) => {
+    try {
+        const { orderStatus } = req.body; // Target values: 'Accepted', 'Processing', 'Shipped', 'Delivered'
+        const sellerId = req.user.id || req.user._id;
+
+        const order = await Order.findById(req.params.id);
+        if (!order) return res.status(404).json({ message: 'Order reference entry missing.' });
+
+        // Security check: Verify this product belongs to the active seller
+        const product = await Product.findById(order.productId);
+        if (!product || product.sellerInfo.userId.toString() !== sellerId.toString()) {
+            return res.status(401).json({ message: 'Unauthorized status management payload.' });
+        }
+
+        order.orderStatus = orderStatus;
+        await order.save();
+
+        res.status(200).json({ message: `Order status upgraded to ${orderStatus} successfully!`, order });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to patch status pipeline.', error: error.message });
+    }
+});
+
+// ==========================================
+// GET: INDIVIDUAL PRODUCT FOR EDIT PRE-POPULATION
+// ==========================================
+router.get('/products/:id', verifyToken, isSeller, async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (!product) {
+            return res.status(404).json({ message: 'Target product listing not found.' });
+        }
+        res.status(200).json(product);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error fetching product.', error: error.message });
     }
 });
 
