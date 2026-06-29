@@ -1,68 +1,243 @@
-// routes/productRoutes.js or update within server.js
-const express = require('express');
+// routes/productRoutes.js
+
+import express from 'express';
+import Product from '../models/Product.js';
+
 const router = express.Router();
-const Product = require('../models/Product'); // Matches your model structure exactly
 
-// @desc    Get all products with advanced search, sorting, filtering, and pagination
-// @route   GET /api/products
+
+// =====================================
+// GET ALL PRODUCTS
+// =====================================
 router.get('/', async (req, res) => {
+
     try {
-        // 1. Destructure query parameters with default fallbacks
-        const { search, category, sort, page = 1, limit = 6 } = req.query;
 
-        // 2. Build a dynamic MongoDB query object
-        let query = { status: 'available' }; // Only show available items in discovery 
+        const {
+            search,
+            category,
+            condition,
+            sort,
+            minPrice,
+            maxPrice,
+            page = 1,
+            limit = 8
+        } = req.query;
 
-        // Challenge 1: Advanced Search by Name (Title) 
-        if (search) {
-            query.title = { $regex: search, $options: 'i' }; // Case-insensitive partial matching
+
+        let query = {};
+
+
+        // Search by title
+        if (search && search.trim() !== '') {
+
+            query.title = {
+                $regex: search.trim(),
+                $options: 'i'
+            };
+
         }
 
-        // Challenge 1: Advanced Filter by Category 
-        if (category && category !== 'All') {
+
+        // Category filter
+        if (
+            category &&
+            category !== 'All Categories' &&
+            category !== 'All'
+        ) {
+
             query.category = category;
+
         }
 
-        // Challenge 1: Advanced Sorting 
-        let sortOptions = {};
-        if (sort === 'priceLowHigh') {
-            sortOptions.price = 1; // Ascending 
-        } else if (sort === 'priceHighLow') {
-            sortOptions.price = -1; // Descending 
-        } else {
-            sortOptions.createdAt = -1; // Newest listings first by default
+
+        // Condition filter
+        if (
+            condition &&
+            condition !== 'All Conditions' &&
+            condition !== 'All'
+        ) {
+
+            query.condition = condition;
+
         }
 
-        // Challenge 2: Pagination Calculations 
-        const currentPage = parseInt(page);
-        const resultsPerPage = parseInt(limit);
-        const skip = (currentPage - 1) * resultsPerPage;
 
-        // Execute queries in parallel for efficiency
-        const [products, totalProducts] = await Promise.all([
-            Product.find(query)
-                .sort(sortOptions)
-                .skip(skip)
-                .limit(resultsPerPage),
-            Product.countDocuments(query)
-        ]);
+        // Price filter
+        if (minPrice || maxPrice) {
 
-        // Send paginated payload response
-        res.status(200).json({
-            success: true,
-            products,
-            meta: {
-                totalProducts,
-                currentPage,
-                totalPages: Math.ceil(totalProducts / resultsPerPage),
-                resultsPerPage
+            query.price = {};
+
+            if (minPrice) {
+                query.price.$gte = Number(minPrice);
             }
+
+            if (maxPrice) {
+                query.price.$lte = Number(maxPrice);
+            }
+
+        }
+
+
+
+        // Sorting
+        let sortOption = {
+            createdAt: -1
+        };
+
+
+        if (sort === 'priceLowHigh') {
+
+            sortOption = {
+                price: 1
+            };
+
+        }
+
+
+        if (sort === 'priceHighLow') {
+
+            sortOption = {
+                price: -1
+            };
+
+        }
+
+
+
+        const pageNumber = Number(page);
+        const limitNumber = Number(limit);
+
+        const skip =
+            (pageNumber - 1) * limitNumber;
+
+
+
+        const totalProducts =
+            await Product.countDocuments(query);
+
+
+
+        const products =
+            await Product.find(query)
+                .sort(sortOption)
+                .skip(skip)
+                .limit(limitNumber);
+
+
+
+        res.status(200).json({
+
+            success: true,
+
+            products,
+
+            meta: {
+
+                totalProducts,
+
+                totalPages:
+                    Math.ceil(totalProducts / limitNumber),
+
+                currentPage: pageNumber
+
+            }
+
         });
 
+
+
     } catch (error) {
-        console.error("Error fetching products:", error);
-        res.status(500).json({ success: false, message: "Server error fetching products" });
+
+
+        console.error(
+            "Get products error:",
+            error
+        );
+
+
+        res.status(500).json({
+
+            success: false,
+
+            message: error.message
+
+        });
+
+
     }
+
 });
 
-module.exports = router;
+
+
+
+
+// =====================================
+// GET SINGLE PRODUCT DETAILS
+// =====================================
+router.get('/:id', async (req, res) => {
+
+
+    try {
+
+
+        const product =
+            await Product.findById(req.params.id);
+
+
+
+        if (!product) {
+
+
+            return res.status(404).json({
+
+                success: false,
+
+                message: "Product not found"
+
+            });
+
+
+        }
+
+
+
+        res.status(200).json({
+
+            success: true,
+
+            product
+
+        });
+
+
+
+    } catch (error) {
+
+
+        console.error(
+            "Single product error:",
+            error
+        );
+
+
+        res.status(500).json({
+
+            success: false,
+
+            message: error.message
+
+        });
+
+
+    }
+
+
+});
+
+
+
+
+
+export default router;
