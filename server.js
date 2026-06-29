@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
+import buyerRoutes from './routes/buyerRoutes.js';
+
 
 dotenv.config();
 
@@ -14,6 +16,7 @@ app.use(express.json());
 
 // Main Authentication Enpoints Router Integration
 app.use('/api/auth', authRoutes);
+app.use('/api/buyer', buyerRoutes);
 
 app.get('/', (req, res) => {
     res.status(200).json({ message: "ReSell Hub API Server Running Smoothly" });
