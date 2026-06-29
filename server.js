@@ -8,17 +8,29 @@ import authRoutes from './routes/authRoutes.js';
 import buyerRoutes from './routes/buyerRoutes.js';
 import sellerRoutes from './routes/sellerRoutes.js';
 import productRoutes from './routes/productRoutes.js';
-import adminRoutes from './routes/adminRoutes.js'; // Clean ES Import
+import adminRoutes from './routes/adminRoutes.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Middleware - Updated for flexible Vercel + Local CORS handling
 app.use(
     cors({
-        origin: process.env.CLIENT_URL || 'http://localhost:3000',
+        origin: function (origin, callback) {
+            const allowedOrigins = [
+                'http://localhost:3000',
+                process.env.CLIENT_URL
+            ];
+
+            // Allow if it's local testing, matches CLIENT_URL, is a Vercel preview URL, or has no origin (like Postman)
+            if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
         credentials: true
     })
 );
@@ -39,13 +51,18 @@ app.get('/', (req, res) => {
     });
 });
 
-// Database + Server
+// Database Connection (Runs asynchronously for Serverless environments)
 connectDB()
-    .then(() => {
-        app.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
-        });
-    })
     .catch((error) => {
         console.error("Database connection failed:", error);
     });
+
+// Only run app.listen locally (Vercel manages ports automatically in production)
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`Server running locally on port ${PORT}`);
+    });
+}
+
+// Export the app instance for Vercel's serverless handler
+export default app;
