@@ -63,7 +63,11 @@ router.delete('/users/:id', verifyToken, authorizeRoles('admin'), async (req, re
     }
 });
 
-// Add these routes to your existing adminRoutes.js file
+// ==========================================
+// 2. MANAGE PRODUCTS ENDPOINTS
+// ==========================================
+
+// Get all products with filtering options
 router.get('/products', verifyToken, authorizeRoles('admin'), async (req, res) => {
     try {
         const { search, status } = req.query;
@@ -80,21 +84,74 @@ router.get('/products', verifyToken, authorizeRoles('admin'), async (req, res) =
     }
 });
 
+// Update Product Status
 router.patch('/products/:id/status', verifyToken, authorizeRoles('admin'), async (req, res) => {
     try {
         const { status } = req.body;
+
+        if (!['pending', 'approved', 'rejected', 'available', 'sold'].includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid status value' });
+        }
+
         const product = await Product.findByIdAndUpdate(req.params.id, { status }, { new: true });
-        if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-        res.status(200).json({ success: true, data: product });
+
+        if (!product) {
+            return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+
+        res.status(200).json({ success: true, message: `Product marked as ${status}`, data: product });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
+// Delete Product Listing
 router.delete('/products/:id', verifyToken, authorizeRoles('admin'), async (req, res) => {
     try {
         await Product.findByIdAndDelete(req.params.id);
         res.status(200).json({ success: true, message: 'Product deleted' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// ==========================================
+// 3. MANAGE ORDERS ENDPOINTS
+// ==========================================
+
+// Get all orders populated with product info
+router.get('/orders', verifyToken, authorizeRoles('admin'), async (req, res) => {
+    try {
+        const orders = await Order.find()
+            .populate('productId')
+            .sort({ createdAt: -1 });
+        res.status(200).json({ success: true, data: orders });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Change/Update Order Status
+router.patch('/orders/:id/status', verifyToken, authorizeRoles('admin'), async (req, res) => {
+    try {
+        const { orderStatus } = req.body;
+        const validStatuses = ['Pending', 'Accepted', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+
+        if (!validStatuses.includes(orderStatus)) {
+            return res.status(400).json({ success: false, message: 'Invalid order status value' });
+        }
+
+        const order = await Order.findByIdAndUpdate(
+            req.params.id,
+            { orderStatus },
+            { new: true }
+        ).populate('productId');
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        res.status(200).json({ success: true, message: `Order status updated to ${orderStatus}`, data: order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
