@@ -63,4 +63,41 @@ router.delete('/users/:id', verifyToken, authorizeRoles('admin'), async (req, re
     }
 });
 
+// Add these routes to your existing adminRoutes.js file
+router.get('/products', verifyToken, authorizeRoles('admin'), async (req, res) => {
+    try {
+        const { search, status } = req.query;
+        let query = {};
+        if (search) {
+            query.$or = [{ title: { $regex: search, $options: 'i' } }, { category: { $regex: search, $options: 'i' } }];
+        }
+        if (status && status !== 'all') query.status = status;
+
+        const products = await Product.find(query).sort({ createdAt: -1 });
+        res.status(200).json({ success: true, data: products });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.patch('/products/:id/status', verifyToken, authorizeRoles('admin'), async (req, res) => {
+    try {
+        const { status } = req.body;
+        const product = await Product.findByIdAndUpdate(req.params.id, { status }, { new: true });
+        if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+        res.status(200).json({ success: true, data: product });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.delete('/products/:id', verifyToken, authorizeRoles('admin'), async (req, res) => {
+    try {
+        await Product.findByIdAndDelete(req.params.id);
+        res.status(200).json({ success: true, message: 'Product deleted' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 export default router;

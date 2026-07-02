@@ -15,10 +15,14 @@ const productSchema = new mongoose.Schema({
         userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
         name: { type: String, required: true },
         email: { type: String, required: true },
-        phone: { type: String, required: false, default: '' } // Changed to false to prevent registration crashes
+        phone: { type: String, required: false, default: '' }
     },
-    status: { type: String, enum: ['available', 'sold'], default: 'available' }
+    // Updated enum to support admin moderation flow
+    status: {
+        type: String,
+        enum: ['available', 'sold', 'pending', 'approved', 'rejected'],
+        default: 'pending'
+    }
 }, { timestamps: true });
 
-// Check to see if model is already compiled to avoid Mongoose OverwriteModelError in server reloads
 export default mongoose.models.Product || mongoose.model('Product', productSchema);
