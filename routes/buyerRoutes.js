@@ -14,28 +14,22 @@ const router = express.Router();
  */
 router.get('/overview', verifyJWT, async (req, res) => {
     try {
-        // Your Phase 2 authMiddleware should attach the authenticated user data to req.user
         const buyerEmail = req.user.email;
         const buyerId = req.user._id;
 
-        // 1. Fetch orders placed by this buyer
         const orders = await Order.find({ 'buyerInfo.email': buyerEmail })
             .populate('productId')
-            .sort({ createdAt: -1 }); // Get latest orders first
+            .sort({ createdAt: -1 });
 
-        // 2. Fetch buyer's fresh profile to get the up-to-date wishlist array
         const userProfile = await User.findById(buyerId).populate('wishlist');
 
-        // 3. Compute Summary Statistics
         const totalOrders = orders.length;
         const wishlistCount = userProfile?.wishlist?.length || 0;
 
-        // Calculate total spent from successfully paid orders
         const totalSpent = orders
             .filter(order => order.paymentStatus === 'paid')
             .reduce((sum, order) => sum + (order.price || 0), 0);
 
-        // Filter out completed orders count
         const completedOrders = orders.filter(order => order.orderStatus === 'delivered').length;
 
         res.status(200).json({
@@ -46,7 +40,7 @@ router.get('/overview', verifyJWT, async (req, res) => {
                 totalSpent,
                 completedOrders
             },
-            recentOrders: orders.slice(0, 5), // Return last 5 orders for the overview dashboard section
+            recentOrders: orders.slice(0, 5),
             wishlist: userProfile?.wishlist || []
         });
     } catch (error) {
@@ -68,14 +62,12 @@ router.patch('/orders/:id/cancel', verifyJWT, async (req, res) => {
         const orderId = req.params.id;
         const buyerEmail = req.user.email;
 
-        // Ensure the order belongs to the requesting buyer
         const order = await Order.findOne({ _id: orderId, 'buyerInfo.email': buyerEmail });
 
         if (!order) {
             return res.status(404).json({ success: false, message: 'Order record not found.' });
         }
 
-        // Strict Assignment Rule: Order can only be cancelled before shipment
         if (['shipped', 'delivered'].includes(order.orderStatus)) {
             return res.status(400).json({
                 success: false,
@@ -100,22 +92,15 @@ router.patch('/orders/:id/cancel', verifyJWT, async (req, res) => {
     }
 });
 
-export default router;
-
 /**
- * ==========================================
- * WISHLIST FUNCTIONALITY ENDPOINTS
- * ==========================================
+ * @route   GET /api/buyer/wishlist
+ * @desc    Get all populated products in the logged-in buyer's wishlist
+ * @access  Private (Buyer Only)
  */
-
-// @route   GET /api/buyer/wishlist
-// @desc    Get all populated products in the logged-in buyer's wishlist
-// @access  Private (Buyer Only)
 router.get('/wishlist', verifyJWT, async (req, res) => {
     try {
-        const buyerId = req.user._id;
+        const buyerId = req.user._id || req.user.id;
 
-        // Find user and populate their array of wishlist items
         const userProfile = await User.findById(buyerId).populate('wishlist');
         if (!userProfile) {
             return res.status(404).json({ success: false, message: 'User not found.' });
@@ -127,17 +112,49 @@ router.get('/wishlist', verifyJWT, async (req, res) => {
     }
 });
 
-// @route   DELETE /api/buyer/wishlist/:productId
-// @desc    Remove a product item from the user's wishlist array
-// @access  Private (Buyer Only)
+/**
+ * @route   POST /api/buyer/wishlist
+ * @desc    Add a product to the buyer's wishlist array
+ * @access  Private (Buyer Only)
+ */
+router.post('/wishlist', verifyJWT, async (req, res) => {
+    try {
+        const buyerId = req.user._id || req.user.id;
+        const { productId } = req.body;
+
+        if (!productId) {
+            return res.status(400).json({ success: false, message: 'Product ID is required' });
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            buyerId,
+            { $addToSet: { wishlist: productId } },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.status(200).json({ success: true, message: 'Product successfully saved to wishlist' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * @route   DELETE /api/buyer/wishlist/:productId
+ * @desc    Remove a product item from the user's wishlist array
+ * @access  Private (Buyer Only)
+ */
 router.delete('/wishlist/:productId', verifyJWT, async (req, res) => {
     try {
-        const buyerId = req.user._id;
+        const buyerId = req.user._id || req.user.id;
         const { productId } = req.params;
 
         await User.findByIdAndUpdate(
             buyerId,
-            { $pull: { wishlist: productId } }, // Removes the item from the reference array inside MongoDB
+            { $pull: { wishlist: productId } },
             { new: true }
         );
 
@@ -147,26 +164,17 @@ router.delete('/wishlist/:productId', verifyJWT, async (req, res) => {
     }
 });
 
-
 /**
- * ==========================================
- * PAYMENT HISTORY ENDPOINTS
- * ==========================================
+ * @route   GET /api/buyer/payments
+ * @desc    Get all payment records matching orders made by this buyer
+ * @access  Private (Buyer Only)
  */
-
-// @route   GET /api/buyer/payments
-// @desc    Get all payment records matching orders made by this buyer
-// @access  Private (Buyer Only)
 router.get('/payments', verifyJWT, async (req, res) => {
     try {
         const buyerEmail = req.user.email;
 
-        // 1. Find all orders matching this buyer's email address
         const buyerOrders = await Order.find({ 'buyerInfo.email': buyerEmail });
-        const orderIds = buyerOrders.map(order => order._id);
 
-        // 2. Fallback Generation for academic data demonstration: 
-        // If your project doesn't have a distinct "Payment" collection yet, we can maps paid orders safely!
         const transactions = buyerOrders.map(order => ({
             _id: order._id,
             transactionId: `TXN-${order._id.toString().slice(-8).toUpperCase()}`,
@@ -184,22 +192,13 @@ router.get('/payments', verifyJWT, async (req, res) => {
     }
 });
 
-
 /**
- * ==========================================
- * PROFILE MANAGEMENT ENDPOINTS
- * ==========================================
+ * @route   PUT /api/buyer/profile
+ * @desc    Update editable parameters of the buyer's account profile
+ * @access  Private (Buyer Only)
  */
-
-// @route   PUT /api/buyer/profile
-// @desc    Update editable parameters of the buyer's account profile
-// @access  Private (Buyer Only)
-// @route   PUT /api/buyer/profile
-// @desc    Update editable parameters of the buyer's account profile
-// @access  Private (Buyer Only)
 router.put('/profile', verifyJWT, async (req, res) => {
     try {
-        // Fallback safety checks to capture how your JWT identifies the user
         const buyerId = req.user._id || req.user.id;
         const buyerEmail = req.user.email;
 
@@ -212,7 +211,6 @@ router.put('/profile', verifyJWT, async (req, res) => {
         if (bio) fieldsToUpdate.bio = bio;
         if (photo) fieldsToUpdate.photo = photo;
 
-        // Use findOneAndUpdate with an OR condition ($or) to ensure a match by ID or Email
         const updatedUser = await User.findOneAndUpdate(
             {
                 $or: [
@@ -237,3 +235,5 @@ router.put('/profile', verifyJWT, async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
+
+export default router;
