@@ -14,13 +14,25 @@ const router = express.Router();
  */
 router.get('/overview', verifyJWT, async (req, res) => {
     try {
-        const buyerEmail = req.user.email;
-        const buyerId = req.user._id;
+        const buyerEmail = req.user?.email;
+        // Safe check for both token schemas (_id vs id formats)
+        const buyerId = req.user?._id || req.user?.id;
 
-        const orders = await Order.find({ 'buyerInfo.email': buyerEmail })
+        if (!buyerId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized access: Invalid identity verification.' });
+        }
+
+        // 1. Fetch buyer orders using either their email string or object ID parameter
+        const orders = await Order.find({
+            $or: [
+                { 'buyerInfo.email': buyerEmail },
+                { buyerId: buyerId }
+            ]
+        })
             .populate('productId')
             .sort({ createdAt: -1 });
 
+        // 2. Fetch the user document and ensure the deep population of the wishlist items array
         const userProfile = await User.findById(buyerId).populate('wishlist');
 
         const totalOrders = orders.length;
@@ -28,7 +40,7 @@ router.get('/overview', verifyJWT, async (req, res) => {
 
         const totalSpent = orders
             .filter(order => order.paymentStatus === 'paid')
-            .reduce((sum, order) => sum + (order.price || 0), 0);
+            .reduce((sum, order) => sum + (order.price || order.productId?.price || 0), 0);
 
         const completedOrders = orders.filter(order => order.orderStatus === 'delivered').length;
 
@@ -61,8 +73,15 @@ router.patch('/orders/:id/cancel', verifyJWT, async (req, res) => {
     try {
         const orderId = req.params.id;
         const buyerEmail = req.user.email;
+        const buyerId = req.user._id || req.user.id;
 
-        const order = await Order.findOne({ _id: orderId, 'buyerInfo.email': buyerEmail });
+        const order = await Order.findOne({
+            _id: orderId,
+            $or: [
+                { 'buyerInfo.email': buyerEmail },
+                { buyerId: buyerId }
+            ]
+        });
 
         if (!order) {
             return res.status(404).json({ success: false, message: 'Order record not found.' });
@@ -172,13 +191,19 @@ router.delete('/wishlist/:productId', verifyJWT, async (req, res) => {
 router.get('/payments', verifyJWT, async (req, res) => {
     try {
         const buyerEmail = req.user.email;
+        const buyerId = req.user._id || req.user.id;
 
-        const buyerOrders = await Order.find({ 'buyerInfo.email': buyerEmail });
+        const buyerOrders = await Order.find({
+            $or: [
+                { 'buyerInfo.email': buyerEmail },
+                { buyerId: buyerId }
+            ]
+        }).populate('productId');
 
         const transactions = buyerOrders.map(order => ({
             _id: order._id,
             transactionId: `TXN-${order._id.toString().slice(-8).toUpperCase()}`,
-            amount: order.productId?.price || 0,
+            amount: order.price || order.productId?.price || 0,
             paymentStatus: order.paymentStatus === 'paid' ? 'success' : 'pending',
             createdAt: order.createdAt || new Date(),
             orderId: {
